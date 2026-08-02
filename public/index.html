@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BrugZap - Painel de Automação</title>
+  <style>
+    :root {
+      --primary: #25D366;
+      --primary-dark: #128C7E;
+      --dark: #075E54;
+      --bg: #F0F2F5;
+      --card-bg: #FFFFFF;
+      --danger: #E53935;
+      --secondary: #546E7A;
+    }
+    * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; }
+    body { background-color: var(--bg); padding: 20px; color: #333; }
+    header { background-color: var(--dark); color: white; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+    h1 { font-size: 1.5rem; }
+    .tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+    .tab-btn { padding: 10px 20px; background: #ddd; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+    .tab-btn.active { background: var(--primary); color: white; }
+    .tab-content { display: none; background: var(--card-bg); padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    .tab-content.active { display: block; }
+    .form-group { margin-bottom: 15px; }
+    label { display: block; font-weight: bold; margin-bottom: 5px; }
+    input, select, textarea { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 1rem; }
+    textarea { height: 80px; resize: vertical; }
+    .radio-group { display: flex; gap: 20px; margin-bottom: 15px; align-items: center; }
+    .radio-group label { font-weight: normal; margin-bottom: 0; cursor: pointer; display: flex; align-items: center; gap: 5px; }
+    .radio-group input[type="radio"] { width: auto; }
+    .actions { margin-top: 15px; display: flex; gap: 10px; }
+    button { padding: 8px 15px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; }
+    .btn-save { background: var(--primary); color: white; }
+    .btn-cancel { background: var(--secondary); color: white; }
+    .btn-edit { background: #FFB300; color: white; }
+    .btn-delete { background: var(--danger); color: white; }
+    .btn-add { background: var(--primary-dark); color: white; margin-bottom: 15px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+    th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+    th { background-color: #f8f9fa; }
+    .badge-enviado { background: var(--primary); }
+    .badge-erro, .badge-falhou_numero_invalido { background: var(--danger); }
+
+    .badge {
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: bold;
+  text-transform: lowercase;
+}
+
+.badge-pendente {
+  background-color: #ffc107;
+  color: #000;
+}
+
+.badge-execucao {
+  background-color: #17a2b8; /* Azul claro / Turquesa */
+  color: #fff;
+}
+
+.badge-finalizado {
+  background-color: #6c757d;
+  color: #fff;
+}
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>📱 BrugZap - Painel de Controle</h1>
+  </header>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="showTab(event, 'contatos')">Contatos</button>
+    <button class="tab-btn" onclick="showTab(event, 'grupos')">Grupos</button>
+    <button class="tab-btn" onclick="showTab(event, 'templates')">Templates</button>
+    <button class="tab-btn" onclick="showTab(event, 'agendamentos')">Agendamentos</button>
+  </div>
+
+  <!-- TAB CONTATOS -->
+  <div id="tab-contatos" class="tab-content active">
+    <button class="btn-add" onclick="novoContato()">+ Incluir Contato</button>
+    <form id="form-contato" style="display:none;" onsubmit="salvarContato(event)">
+      <input type="hidden" id="contato-id">
+      <div class="form-group">
+        <label>Nome:</label>
+        <input type="text" id="contato-nome" required>
+      </div>
+      <div class="form-group">
+        <label>Telefone (DDD + Número):</label>
+        <input type="text" id="contato-telefone" placeholder="47984473551" required>
+      </div>
+      <div class="form-group">
+        <label for="contato-grupo">Grupo:</label>
+        <select id="contato-grupo">
+          <option value="">Sem grupo</option>
+        </select>
+      </div>
+      <div class="actions">
+        <button type="submit" class="btn-save">Gravar</button>
+        <button type="button" class="btn-cancel" onclick="cancelarContato()">Cancelar</button>
+      </div>
+    </form>
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Nome</th><th>Telefone</th><th>Grupo</th><th>Ações</th></tr>
+      </thead>
+      <tbody id="tabela-contatos"></tbody>
+    </table>
+  </div>
+
+  <!-- TAB GRUPOS -->
+  <div id="tab-grupos" class="tab-content">
+    <button class="btn-add" onclick="novoGrupo()">+ Incluir Grupo</button>
+    <form id="form-grupo" style="display:none;" onsubmit="salvarGrupo(event)">
+      <input type="hidden" id="grupo-id">
+      <div class="form-group">
+        <label>Nome do Grupo:</label>
+        <input type="text" id="grupo-nome" required>
+      </div>
+      <div class="actions">
+        <button type="submit" class="btn-save">Gravar</button>
+        <button type="button" class="btn-cancel" onclick="cancelarGrupo()">Cancelar</button>
+      </div>
+    </form>
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Nome do Grupo</th><th>Ações</th></tr>
+      </thead>
+      <tbody id="tabela-grupos"></tbody>
+    </table>
+  </div>
+
+  <!-- TAB TEMPLATES -->
+  <!-- TAB TEMPLATES -->
+  <div id="tab-templates" class="tab-content">
+    <button class="btn-add" onclick="novoTemplate()">+ Incluir Template</button>
+    
+    <!-- Adicionado style="display:none;" para começar oculto -->
+    <form id="form-template" style="display:none;" onsubmit="salvarTemplate(event)">
+      <input type="hidden" id="template-id">
+
+      <div class="form-group" style="margin-bottom: 10px;">
+        <label><strong>Nome do Template:</strong></label>
+        <input type="text" id="template-nome" required class="form-control" placeholder="Ex: Mensagem de Boas-vindas">
+      </div>
+
+      <div class="form-group" style="margin-bottom: 10px;">
+        <label><strong>Conteúdo da Mensagem (use {nome} para personalizar):</strong></label>
+        <textarea id="template-conteudo" required class="form-control" rows="4" placeholder="Olá {nome}, tudo bem?"></textarea>
+      </div>
+
+      <div class="form-group" style="margin-bottom: 10px;">
+        <label><strong>Imagem/Arquivo de Anexo (Opcional):</strong></label>
+        <input type="file" id="template-anexo" class="form-control">
+      </div>
+
+      <div style="margin-top: 15px; margin-bottom: 20px;">
+        <button type="submit" class="btn btn-success" style="background:#28a745; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer;">Gravar</button>
+        <!-- Agora chama cancelarTemplate() para fechar a tela -->
+        <button type="button" class="btn btn-secondary" onclick="cancelarTemplate()" style="background:#6c757d; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer; margin-left:5px;">Cancelar</button>
+      </div>
+    </form>
+
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Nome</th><th>Conteúdo</th><th>Ações</th></tr>
+      </thead>
+      <tbody id="tabela-templates"></tbody>
+    </table>
+  </div>
+
+  <!-- TAB AGENDAMENTOS -->
+<div id="tab-agendamentos" class="tab-content">
+  <button class="btn-add" onclick="novoAgendamento()">+ Novo Agendamento</button>
+
+  <form id="form-agendamento" style="display:none; background: #f9f9f9; padding: 15px; border-radius: 8px;" onsubmit="salvarAgendamento(event)">
+    <input type="hidden" id="agendamento-id">
+    
+    <div class="form-group">
+      <label>Nome da Agenda / Campanha:</label>
+      <input type="text" id="agendamento-nome" placeholder="Ex: Lembrete de Reunião Semanal" required>
+    </div>
+
+    <div class="radio-group">
+      <label><input type="radio" name="tipo_envio" value="contato" checked onchange="alternarTipoEnvio()"> Individual</label>
+      <label><input type="radio" name="tipo_envio" value="grupo" onchange="alternarTipoEnvio()"> Para um Grupo</label>
+    </div>
+
+    <div id="box-contato" class="form-group">
+      <label for="agendamento-contato">Contato:</label>
+      <select id="agendamento-contato"><option value="">Selecione...</option></select>
+    </div>
+
+    <div id="box-grupo" class="form-group" style="display: none;">
+      <label for="agendamento-grupo">Grupo:</label>
+      <select id="agendamento-grupo"><option value="">Selecione...</option></select>
+    </div>
+
+    <div class="form-group">
+      <label for="agendamento-template">Template:</label>
+      <select id="agendamento-template" required><option value="">Selecione...</option></select>
+    </div>
+
+    <!-- TIPO DE RECORRÊNCIA -->
+    <div class="form-group">
+      <label>Frequência / Programação de Dias:</label>
+      <select id="agendamento-tipo-data" onchange="alternarTipoData()">
+        <option value="fixo">Data(s) Fixa(s) do Calendário</option>
+        <option value="recorrente">Dias da Semana Recorrentes</option>
+      </select>
+    </div>
+
+    <!-- BOX DATAS FIXAS -->
+    <div id="box-datas-fixas" class="form-group">
+      <label>Escolha a(s) Data(s):</label>
+      <input type="date" id="input-data-fixa-temp">
+      <button type="button" onclick="adicionarDataFixa()" style="margin-top:5px; background:#546E7A; color:white;">+ Adicionar Data</button>
+      <div id="lista-datas-fixas" style="margin-top: 8px; display: flex; gap: 5px; flex-wrap: wrap;"></div>
+    </div>
+
+    <!-- BOX DIAS DA SEMANA -->
+    <div id="box-dias-semana" class="form-group" style="display: none;">
+      <label>Selecione os dias da semana:</label>
+      <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 5px;">
+        <label><input type="checkbox" class="chk-dia-semana" value="0"> Dom</label>
+        <label><input type="checkbox" class="chk-dia-semana" value="1"> Seg</label>
+        <label><input type="checkbox" class="chk-dia-semana" value="2"> Ter</label>
+        <label><input type="checkbox" class="chk-dia-semana" value="3"> QuA</label>
+        <label><input type="checkbox" class="chk-dia-semana" value="4"> Qui</label>
+        <label><input type="checkbox" class="chk-dia-semana" value="5"> Sex</label>
+        <label><input type="checkbox" class="chk-dia-semana" value="6"> Sáb</label>
+      </div>
+    </div>
+
+    <!-- BOX MÚLTIPLOS HORÁRIOS -->
+    <div class="form-group">
+      <label>Horário(s) de Disparo:</label>
+      <div style="display: flex; gap: 10px;">
+        <input type="time" id="input-horario-temp">
+        <button type="button" onclick="adicionarHorario()" style="background:#546E7A; color:white;">+ Adicionar Horário</button>
+      </div>
+      <div id="lista-horarios" style="margin-top: 8px; display: flex; gap: 5px; flex-wrap: wrap;"></div>
+    </div>
+
+    <!-- STATUS ATIVO / INATIVO -->
+    <div class="form-group" style="display: flex; align-items: center; gap: 10px;">
+      <label for="agendamento-ativo" style="margin-bottom:0;">Agendamento Ativo?</label>
+      <input type="checkbox" id="agendamento-ativo" checked style="width: auto;">
+    </div>
+
+    <div class="actions">
+      <button type="submit" class="btn-save">Agendar Mensagem</button>
+      <button type="button" class="btn-cancel" onclick="cancelarAgendamento()">Cancelar</button>
+    </div>
+  </form>
+
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Nome</th>
+        <th>Ativo</th>
+        <th>Destinatário</th>
+        <th>Programação</th>
+        <th>Horários</th>
+        <th>Status</th>
+        <th>Ações</th>
+      </tr>
+    </thead>
+    <tbody id="tabela-agendamentos"></tbody>
+  </table>
+</div>
+
+  <script>
+    function showTab(evt, tabName) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+      document.getElementById(`tab-${tabName}`).classList.add('active');
+      if (evt && evt.target) {
+        evt.target.classList.add('active');
+      }
+
+      if (tabName === 'contatos') carregarContatos();
+      if (tabName === 'grupos') carregarGrupos();
+      if (tabName === 'templates') carregarTemplates();
+      if (tabName === 'agendamentos') carregarAgendamentos();
+    }
+
+    // ================= CONTATOS =================
+    async function carregarContatos() {
+      try {
+        const res = await fetch('/contatos');
+        const contatos = await res.json();
+        const tbody = document.getElementById('tabela-contatos');
+        if (!Array.isArray(contatos)) return;
+        tbody.innerHTML = contatos.map(c => `
+          <tr>
+            <td>${c.id}</td>
+            <td>${c.nome}</td>
+            <td>${c.telefone}</td>
+            <td>${c.grupo_nome || '<em>Sem grupo</em>'}</td>
+            <td>
+              <button class="btn-edit" onclick="editarContato(${c.id}, '${c.nome}', '${c.telefone}', '${c.grupo_id || ''}')">Alterar</button>
+              <button class="btn-delete" onclick="excluirContato(${c.id})">Excluir</button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (e) {
+        console.error("Erro ao carregar contatos:", e);
+      }
+    }
+
+    async function carregarOpcoesGruposParaContato(grupoIdSelecionado = '') {
+      try {
+        const res = await fetch('/grupos');
+        const grupos = await res.json();
+        const select = document.getElementById('contato-grupo');
+        select.innerHTML = '<option value="">Sem grupo</option>';
+        if (Array.isArray(grupos)) {
+          grupos.forEach(g => {
+            const selected = g.id == grupoIdSelecionado ? 'selected' : '';
+            select.innerHTML += `<option value="${g.id}" ${selected}>${g.nome}</option>`;
+          });
+        }
+      } catch (e) {
+        console.error('Erro ao carregar lista de grupos para o contato:', e);
+      }
+    }
+
+    async function novoContato() {
+      document.getElementById('contato-id').value = '';
+      document.getElementById('contato-nome').value = '';
+      document.getElementById('contato-telefone').value = '';
+      await carregarOpcoesGruposParaContato();
+      document.getElementById('form-contato').style.display = 'block';
+    }
+
+    async function editarContato(id, nome, telefone, grupo_id) {
+      document.getElementById('contato-id').value = id;
+      document.getElementById('contato-nome').value = nome;
+      document.getElementById('contato-telefone').value = telefone;
+      await carregarOpcoesGruposParaContato(grupo_id);
+      document.getElementById('form-contato').style.display = 'block';
+    }
+
+    function cancelarContato() {
+      document.getElementById('form-contato').style.display = 'none';
+    }
+
+    async function salvarContato(e) {
+      e.preventDefault();
+      const id = document.getElementById('contato-id').value;
+      const nome = document.getElementById('contato-nome').value;
+      const telefone = document.getElementById('contato-telefone').value;
+      const grupo_id = document.getElementById('contato-grupo').value;
+
+      const url = id ? `/contatos/${id}` : '/contatos';
+      const method = id ? 'PUT' : 'POST';
+
+      await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome, telefone, grupo_id })
+      });
+
+      cancelarContato();
+      carregarContatos();
+    }
+
+    async function excluirContato(id) {
+      if (confirm('Deseja realmente excluir este contato?')) {
+        await fetch(`/contatos/${id}`, { method: 'DELETE' });
+        carregarContatos();
+      }
+    }
+
+    // ================= GRUPOS =================
+    async function carregarGrupos() {
+      try {
+        const res = await fetch('/grupos');
+        const grupos = await res.json();
+        const tbody = document.getElementById('tabela-grupos');
+        if (!Array.isArray(grupos)) return;
+        tbody.innerHTML = grupos.map(g => `
+          <tr>
+            <td>${g.id}</td>
+            <td>${g.nome}</td>
+            <td>
+              <button class="btn-edit" onclick="editarGrupo(${g.id}, '${g.nome.replace(/'/g, "\\'")}')">Alterar</button>
+              <button class="btn-delete" onclick="excluirGrupo(${g.id})">Excluir</button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (e) {
+        console.error("Erro ao carregar grupos:", e);
+      }
+    }
+
+    function novoGrupo() {
+      document.getElementById('grupo-id').value = '';
+      document.getElementById('grupo-nome').value = '';
+      document.getElementById('form-grupo').style.display = 'block';
+    }
+
+    function editarGrupo(id, nome) {
+      document.getElementById('grupo-id').value = id;
+      document.getElementById('grupo-nome').value = nome;
+      document.getElementById('form-grupo').style.display = 'block';
+    }
+
+    function cancelarGrupo() {
+      document.getElementById('form-grupo').style.display = 'none';
+    }
+
+    async function salvarGrupo(e) {
+      e.preventDefault();
+      const id = document.getElementById('grupo-id').value;
+      const nome = document.getElementById('grupo-nome').value.trim();
+
+      if (!nome) return alert('Por favor, informe o nome do grupo.');
+
+      const url = id ? `/grupos/${id}` : '/grupos';
+      const method = id ? 'PUT' : 'POST';
+
+      try {
+        const res = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nome })
+        });
+
+        if (res.ok) {
+          cancelarGrupo();
+          carregarGrupos();
+        } else {
+          alert('Erro ao salvar o grupo.');
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function excluirGrupo(id) {
+      if (confirm('Deseja realmente excluir este grupo? Os contatos associados ficarão sem grupo.')) {
+        await fetch(`/grupos/${id}`, { method: 'DELETE' });
+        carregarGrupos();
+      }
+    }
+
+    // ================= TEMPLATES =================
+    async function carregarTemplates() {
+      try {
+        const res = await fetch('/templates');
+        const templates = await res.json();
+        const tbody = document.getElementById('tabela-templates');
+
+        if (!Array.isArray(templates)) return;
+
+        tbody.innerHTML = templates.map(t => {
+          const temAnexo = t.arquivo_url ? ' 📎' : ''; 
+
+          return `
+            <tr>
+              <td>${t.id}</td>
+              <td><strong>${t.nome}${temAnexo}</strong></td>
+              <td>${t.conteudo}</td>
+              <td>
+                <button onclick="editarTemplate(${t.id})" style="background:#ffc107; color:black; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; margin-right:5px;">Alterar</button>
+                <button onclick="excluirTemplate(${t.id})" style="background:#dc3545; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;">Excluir</button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      } catch (err) {
+        console.error('Erro ao carregar templates:', err);
+      }
+    }
+
+    function novoTemplate() {
+      limparFormularioTemplate();
+      document.getElementById('form-template').style.display = 'block';
+    }
+
+    async function editarTemplate(id) {
+      try {
+        const res = await fetch('/templates');
+        const templates = await res.json();
+        const item = templates.find(t => t.id === id);
+
+        if (item) {
+          document.getElementById('template-id').value = item.id;
+          document.getElementById('template-nome').value = item.nome;
+          document.getElementById('template-conteudo').value = item.conteudo;
+          document.getElementById('template-anexo').value = ''; 
+          document.getElementById('form-template').style.display = 'block'; // Abre a tela no clique do Alterar
+        }
+      } catch (err) {
+        console.error('Erro ao buscar template para edição:', err);
+      }
+    }
+
+    function cancelarTemplate() {
+      limparFormularioTemplate();
+      document.getElementById('form-template').style.display = 'none'; // Fecha o formulário
+    }
+
+    function limparFormularioTemplate() {
+      document.getElementById('template-id').value = '';
+      document.getElementById('template-nome').value = '';
+      document.getElementById('template-conteudo').value = '';
+      document.getElementById('template-anexo').value = '';
+    }
+
+    async function salvarTemplate(event) {
+      event.preventDefault();
+
+      const id = document.getElementById('template-id').value;
+      const nome = document.getElementById('template-nome').value;
+      const conteudo = document.getElementById('template-conteudo').value;
+      const anexoInput = document.getElementById('template-anexo');
+
+      const formData = new FormData();
+      formData.append('nome', nome);
+      formData.append('conteudo', conteudo);
+
+      if (anexoInput && anexoInput.files[0]) {
+        formData.append('anexo', anexoInput.files[0]);
+      }
+
+      const url = id ? `/templates/${id}` : '/templates';
+      const method = id ? 'PUT' : 'POST';
+
+      try {
+        const res = await fetch(url, {
+          method: method,
+          body: formData 
+        });
+
+        if (res.ok) {
+          alert(id ? 'Template alterado com sucesso!' : 'Template cadastrado com sucesso!');
+          cancelarTemplate(); // Reseta os campos e ESCONDE o formulário!
+          carregarTemplates(); // Atualiza a tabela abaixo
+        } else {
+          const err = await res.json();
+          alert('Erro ao salvar template: ' + (err.error || 'Erro desconhecido'));
+        }
+      } catch (err) {
+        console.error('Erro na requisição:', err);
+      }
+    }
+
+    async function excluirTemplate(id) {
+      if (confirm('Deseja realmente excluir este template?')) {
+        await fetch(`/templates/${id}`, { method: 'DELETE' });
+        carregarTemplates();
+      }
+    }
+    // ================= AGENDAMENTOS =================
+
+    let datasFixasSelecionadas = [];
+    let horariosSelecionados = [];
+
+    function alternarTipoEnvio() {
+      const tipo = document.querySelector('input[name="tipo_envio"]:checked').value;
+      const boxContato = document.getElementById('box-contato');
+      const boxGrupo = document.getElementById('box-grupo');
+      
+      if (tipo === 'contato') {
+        boxContato.style.display = 'block';
+        boxGrupo.style.display = 'none';
+        document.getElementById('agendamento-grupo').value = '';
+      } else {
+        boxContato.style.display = 'none';
+        boxGrupo.style.display = 'block';
+        document.getElementById('agendamento-contato').value = '';
+      }
+    }
+
+    async function carregarAgendamentos() {
+  try {
+    const res = await fetch('/agendamentos');
+    const agendamentos = await res.json();
+    const tbody = document.getElementById('tabela-agendamentos');
+
+    if (!Array.isArray(agendamentos)) return;
+
+    const nomesDias = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+    tbody.innerHTML = agendamentos.map(a => {
+      // Define a variável statusAtual DENTRO do map onde 'a' existe:
+      const statusAtual = a.status || (a.ativo ? 'execucao' : 'finalizado');
+
+      const destinatario = a.grupo_nome && a.grupo_nome !== 'Nenhum' 
+        ? `👥 Grupo: ${a.grupo_nome}` 
+        : `👤 ${a.contato_nome}`;
+      
+      let programacao = '';
+      if (a.tipo_agendamento === 'recorrente') {
+        programacao = 'Recorrente: ' + (a.dias_semana || []).map(d => nomesDias[d]).join(', ');
+      } else {
+        programacao = 'Fixa: ' + (a.datas_fixas || []).map(d => d.split('-').reverse().join('/')).join(', ');
+      }
+
+      const horariostxt = (a.horarios || []).join(', ');
+
+      return `
+        <tr>
+          <td>${a.id}</td>
+          <td><strong>${a.nome || 'Sem nome'}</strong></td>
+          <td>${a.ativo ? '🟢 Sim' : '🔴 Não'}</td>
+          <td>${destinatario}</td>
+          <td><small>${programacao}</small></td>
+          <td><small>${horariostxt}</small></td>
+          <td><span class="badge badge-${statusAtual}">${statusAtual}</span></td>
+          <td>
+            <button class="btn-edit" onclick="editarAgendamento(${a.id})" style="background:#2196F3; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; margin-right:5px;">Editar</button>
+            <button class="btn-delete" onclick="excluirAgendamento(${a.id})">Excluir</button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+async function editarAgendamento(id) {
+  try {
+    // Carrega selects atualizados antes
+    await popularSelects();
+
+    // Busca todos os agendamentos para achar o selecionado
+    const res = await fetch('/agendamentos');
+    const agendamentos = await res.json();
+    const agenda = agendamentos.find(a => a.id === id);
+
+    if (!agenda) return alert('Agendamento não encontrado!');
+
+    // Preenche os campos simples
+    document.getElementById('agendamento-id').value = agenda.id;
+    document.getElementById('agendamento-nome').value = agenda.nome || '';
+    document.getElementById('agendamento-template').value = agenda.template_id || '';
+    document.getElementById('agendamento-tipo-data').value = agenda.tipo_agendamento || 'fixo';
+    document.getElementById('agendamento-ativo').checked = agenda.ativo;
+
+    // Tipo de envio (Contato vs Grupo)
+    if (agenda.grupo_id) {
+      document.querySelector('input[name="tipo_envio"][value="grupo"]').checked = true;
+      document.getElementById('agendamento-grupo').value = agenda.grupo_id;
+    } else {
+      document.querySelector('input[name="tipo_envio"][value="contato"]').checked = true;
+      document.getElementById('agendamento-contato').value = agenda.contato_id || '';
+    }
+    alternarTipoEnvio();
+
+    // Alterna visualização de data fixa / recorrente
+    alternarTipoData();
+
+    // Carrega Datas Fixas
+    datasFixasSelecionadas = agenda.datas_fixas || [];
+    renderizarBadgesDatas();
+
+    // Carrega Dias da Semana
+    document.querySelectorAll('.chk-dia-semana').forEach(chk => {
+      chk.checked = (agenda.dias_semana || []).includes(parseInt(chk.value));
+    });
+
+    // Carrega Horários
+    horariosSelecionados = agenda.horarios || [];
+    renderizarBadgesHorarios();
+
+    // Exibe o formulário
+    document.getElementById('form-agendamento').style.display = 'block';
+  } catch (err) {
+    console.error(err);
+    alert('Erro ao carregar dados do agendamento.');
+  }
+}
+
+    async function novoAgendamento() {
+      document.getElementById('agendamento-id').value = '';
+      document.getElementById('agendamento-nome').value = '';
+      document.getElementById('agendamento-ativo').checked = true;
+      datasFixasSelecionadas = [];
+      horariosSelecionados = [];
+      renderizarBadgesDatas();
+      renderizarBadgesHorarios();
+      document.querySelectorAll('.chk-dia-semana').forEach(c => c.checked = false);
+      await popularSelects();
+      document.getElementById('form-agendamento').style.display = 'block';
+    }
+
+    async function popularSelects() {
+      try {
+        const resC = await fetch('/contatos');
+        const contatos = await resC.json();
+        const selectC = document.getElementById('agendamento-contato');
+        if (Array.isArray(contatos) && contatos.length > 0) {
+          selectC.innerHTML = '<option value="">Selecione um contato...</option>' + contatos.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
+        } else {
+          selectC.innerHTML = '<option value="">Cadastre um contato primeiro</option>';
+        }
+      } catch (e) { console.error('Erro ao carregar contatos no select:', e); }
+
+      try {
+        const resG = await fetch('/grupos');
+        const grupos = await resG.json();
+        const selectG = document.getElementById('agendamento-grupo');
+        if (Array.isArray(grupos) && grupos.length > 0) {
+          selectG.innerHTML = '<option value="">Selecione um grupo...</option>' + grupos.map(g => `<option value="${g.id}">${g.nome}</option>`).join('');
+        } else {
+          selectG.innerHTML = '<option value="">Cadastre um grupo primeiro</option>';
+        }
+      } catch (e) { console.error('Erro ao carregar grupos no select:', e); }
+
+      try {
+        const resT = await fetch('/templates');
+        const templates = await resT.json();
+        const selectT = document.getElementById('agendamento-template');
+        if (Array.isArray(templates) && templates.length > 0) {
+          selectT.innerHTML = '<option value="">Selecione um template...</option>' + templates.map(t => `<option value="${t.id}">${t.nome}</option>`).join('');
+        } else {
+          selectT.innerHTML = '<option value="">Cadastre um template primeiro</option>';
+        }
+      } catch (e) { console.error('Erro ao carregar templates no select:', e); }
+    }
+
+    function cancelarAgendamento() {
+      document.getElementById('form-agendamento').style.display = 'none';
+    }
+
+    async function salvarAgendamento(e) {
+  e.preventDefault();
+
+  const id = document.getElementById('agendamento-id').value; // Se tiver ID, é edição
+  const nome = document.getElementById('agendamento-nome').value.trim();
+  const tipo = document.querySelector('input[name="tipo_envio"]:checked').value;
+  const contato_id = document.getElementById('agendamento-contato').value;
+  const grupo_id = document.getElementById('agendamento-grupo').value;
+  const template_id = document.getElementById('agendamento-template').value;
+  const tipo_agendamento = document.getElementById('agendamento-tipo-data').value;
+  const ativo = document.getElementById('agendamento-ativo').checked;
+
+  let dias_semana = [];
+  if (tipo_agendamento === 'recorrente') {
+    document.querySelectorAll('.chk-dia-semana:checked').forEach(c => dias_semana.push(parseInt(c.value)));
+    if (dias_semana.length === 0) return alert('Selecione ao menos um dia da semana!');
+  } else {
+    if (datasFixasSelecionadas.length === 0) return alert('Adicione ao menos uma data fixa!');
+  }
+
+  if (horariosSelecionados.length === 0) return alert('Adicione ao menos um horário de disparo!');
+
+  const bodyData = {
+    nome,
+    contato_id: tipo === 'contato' ? contato_id : null,
+    grupo_id: tipo === 'grupo' ? grupo_id : null,
+    template_id,
+    tipo_agendamento,
+    datas_fixas: datasFixasSelecionadas,
+    dias_semana,
+    horarios: horariosSelecionados,
+    ativo
+  };
+
+  const url = id ? `/agendamentos/${id}` : '/agendamentos';
+  const method = id ? 'PUT' : 'POST';
+
+  try {
+    const res = await fetch(url, {
+      method: method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(bodyData)
+    });
+
+    if (res.ok) {
+      alert(id ? 'Agendamento atualizado com sucesso!' : 'Agendamento salvo com sucesso!');
+      cancelarAgendamento();
+      carregarAgendamentos();
+    } else {
+      const err = await res.json();
+      alert('Erro ao salvar: ' + (err.error || 'Erro interno'));
+    }
+  } catch (err) {
+    console.error(err);
+  }
+}
+function alternarTipoData() {
+  const tipo = document.getElementById('agendamento-tipo-data').value;
+  document.getElementById('box-datas-fixas').style.display = tipo === 'fixo' ? 'block' : 'none';
+  document.getElementById('box-dias-semana').style.display = tipo === 'recorrente' ? 'block' : 'none';
+}
+
+function adicionarDataFixa() {
+  const val = document.getElementById('input-data-fixa-temp').value;
+  if (val && !datasFixasSelecionadas.includes(val)) {
+    datasFixasSelecionadas.push(val);
+    renderizarBadgesDatas();
+  }
+}
+
+function removerDataFixa(data) {
+  datasFixasSelecionadas = datasFixasSelecionadas.filter(d => d !== data);
+  renderizarBadgesDatas();
+}
+
+function renderizarBadgesDatas() {
+  const div = document.getElementById('lista-datas-fixas');
+  div.innerHTML = datasFixasSelecionadas.map(d => 
+    `<span style="background:#e0e0e0; padding: 3px 8px; border-radius: 4px;">${d.split('-').reverse().join('/')} <b onclick="removerDataFixa('${d}')" style="cursor:pointer; color:red;">×</b></span>`
+  ).join('');
+}
+
+function adicionarHorario() {
+  const val = document.getElementById('input-horario-temp').value;
+  if (val && !horariosSelecionados.includes(val)) {
+    horariosSelecionados.push(val);
+    renderizarBadgesHorarios();
+  }
+}
+
+function removerHorario(horario) {
+  horariosSelecionados = horariosSelecionados.filter(h => h !== horario);
+  renderizarBadgesHorarios();
+}
+
+function renderizarBadgesHorarios() {
+  const div = document.getElementById('lista-horarios');
+  div.innerHTML = horariosSelecionados.map(h => 
+    `<span style="background:#e0e0e0; padding: 3px 8px; border-radius: 4px;">${h} <b onclick="removerHorario('${h}')" style="cursor:pointer; color:red;">×</b></span>`
+  ).join('');
+}
+
+
+    async function excluirAgendamento(id) {
+      if (confirm('Deseja realmente excluir este agendamento?')) {
+        await fetch(`/agendamentos/${id}`, { method: 'DELETE' });
+        carregarAgendamentos();
+      }
+    }
+
+    // Inicializa
+    carregarContatos();
+  </script>
+</body>
+</html>

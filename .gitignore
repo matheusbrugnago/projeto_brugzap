@@ -1,12 +1,16 @@
-# Dependências do Node
+# Pastas de dependências do Node
 node_modules/
 
-# Variáveis de ambiente (senhas e dados sensíveis)
-.env
-
-# Sessão salva do WhatsApp
+# Credenciais e Sessão do WhatsApp (MUITO IMPORTANTE NÃO SUBIR)
 .wwebjs_auth/
 .wwebjs_cache/
 
-# Logs de erro do Node
-npm-debug.log*
+# Mídia temporária e uploads
+uploads/*
+!uploads/.gitkeep
+
+# Arquivos de variáveis de ambiente com senhas
+.env
+
+# Logs do sistema
+*.log
