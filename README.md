@@ -1,4 +1,4 @@
-##🚀 Sistema de Disparo e Automação de Mensagens via WhatsApp
+## 🚀 Sistema de Disparo e Automação de Mensagens via WhatsApp
 
 Sistema completo para gerenciamento de contatos, criação de templates de mensagens com suporte a anexos (imagens/documentos) e agendamento de disparos automáticos via WhatsApp Web.
 
