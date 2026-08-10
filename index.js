@@ -35,8 +35,7 @@ app.use(express.json());
 // Servir arquivos estáticos da pasta 'public'
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Configuração do PostgreSQL
-const { Pool } = require('pg');
+// Configuração do PostgreSQ
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
