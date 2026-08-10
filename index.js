@@ -7,7 +7,13 @@ const qrcode = require('qrcode-terminal');
 const path = require('path');
 const mime = require('mime-types');
 const fs = require('fs');
-const multer = require('multer');
+const multer = require('multer'); 
+
+// 1. O servidor deve escutar a porta do ambiente
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Servidor rodando na porta ${PORT}`);
+});
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -30,17 +36,17 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Configuração do PostgreSQL
+const { Pool } = require('pg');
+
 const pool = new Pool({
-  user: process.env.DB_USER,
-  host: process.env.DB_HOST,
-  database: process.env.DB_NAME,
-  password: process.env.DB_PASSWORD,
-  port: process.env.DB_PORT,
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
 });
 
 let whatsappPronto = false;
 
 // Inicialização do WhatsApp Web
+// 2. O Client do WhatsApp precisa das flags headless para conteineres
 const client = new Client({
   authStrategy: new LocalAuth(),
   puppeteer: {
