@@ -8,12 +8,8 @@ const path = require('path');
 const mime = require('mime-types');
 const fs = require('fs');
 const multer = require('multer'); 
-
-// 1. O servidor deve escutar a porta do ambiente
+const app = express();
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
-});
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -29,18 +25,28 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage });
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-const app = express();
-app.use(express.json());
-
-// Servir arquivos estáticos da pasta 'public'
-app.use(express.static(path.join(__dirname, 'public')));
-
-// Configuração do PostgreSQ
-
+//postgresql
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
 });
+
+//Middlewares
+app.use(express.json());
+
+app.get('/', (req, res) => {
+  res.send('API online!');
+});
+
+// 1. O servidor deve escutar a porta do ambiente
+
+app.listen(PORT, () => {
+  console.log(`Servidor rodando na porta ${PORT}`);
+});
+
+// Servir arquivos estáticos da pasta 'public'
+app.use(express.static(path.join(__dirname, 'public')));
+
 
 let whatsappPronto = false;
 
