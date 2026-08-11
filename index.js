@@ -21,6 +21,9 @@ const storage = multer.diskStorage({
     cb(null, Date.now() + ext);
   }
 });
+if (!fs.existsSync('uploads')) {
+  fs.mkdirSync('uploads');
+}
 
 const upload = multer({ storage: storage });
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -55,6 +58,7 @@ let whatsappPronto = false;
 const client = new Client({
   authStrategy: new LocalAuth(),
   puppeteer: {
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
     headless: true,
     args: [
       '--no-sandbox',
@@ -480,9 +484,4 @@ cron.schedule('* * * * *', async () => {
   } catch (err) {
     console.error('❌ Erro no Cron do Robô:', err.message);
   }
-});
-
-// Iniciar Servidor na Porta 3000
-app.listen(3000, () => {
-  console.log('🚀 Servidor rodando na porta 3000');
 });
