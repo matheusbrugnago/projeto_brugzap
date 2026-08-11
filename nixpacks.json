@@ -1,18 +1,23 @@
 {
   "providers": ["node"],
-  "aptPkgs": [
-    "chromium",
-    "glib2.0",
-    "nss",
-    "atk",
-    "cups",
-    "libdrm",
-    "libxcomposite",
-    "libxdamage",
-    "libxext",
-    "libxfixes",
-    "pango",
-    "gbm",
-    "alsa-lib"
-  ]
+  "phases": {
+    "setup": {
+      "aptPkgs": [
+        "chromium",
+        "glib2",
+        "glibc",
+        "nss",
+        "atk",
+        "cups",
+        "libdrm",
+        "libxcomposite",
+        "libxdamage",
+        "libxext",
+        "libxfixes",
+        "pango",
+        "gbm",
+        "alsa-lib"
+      ]
+    }
+  }
 }

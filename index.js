@@ -10,6 +10,14 @@ const fs = require('fs');
 const multer = require('multer'); 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const fs = require('fs');
+
+// Verifica onde o Chromium foi instalado no container
+const getChromiumPath = () => {
+  if (fs.existsSync('/usr/bin/chromium-browser')) return '/usr/bin/chromium-browser';
+  if (fs.existsSync('/usr/bin/chromium')) return '/usr/bin/chromium';
+  return undefined; // Deixa o Puppeteer usar o executável padrão
+};
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -58,6 +66,7 @@ let whatsappPronto = false;
 const client = new Client({
   authStrategy: new LocalAuth(),
   puppeteer: {
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser' || '/usr/bin/chromium',
     headless: true,
     args: [
       '--no-sandbox',
