@@ -13,9 +13,10 @@ const PORT = process.env.PORT || 3000;
 
 // Verifica onde o Chromium foi instalado no container
 const getChromiumPath = () => {
-  if (fs.existsSync('/usr/bin/chromium-browser')) return '/usr/bin/chromium-browser';
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) return process.env.PUPPETEER_EXECUTABLE_PATH;
   if (fs.existsSync('/usr/bin/chromium')) return '/usr/bin/chromium';
-  return undefined; // Deixa o Puppeteer usar o executável padrão
+  if (fs.existsSync('/usr/bin/chromium-browser')) return '/usr/bin/chromium-browser';
+  return undefined;
 };
 
 const storage = multer.diskStorage({
@@ -65,7 +66,7 @@ let whatsappPronto = false;
 const client = new Client({
   authStrategy: new LocalAuth(),
   puppeteer: {
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || getChromiumPath(),
+    executablePath: getChromiumPath(),
     headless: true,
     args: [
       '--no-sandbox',
@@ -74,7 +75,8 @@ const client = new Client({
       '--disable-accelerated-2d-canvas',
       '--no-first-run',
       '--no-zygote',
-      '--disable-gpu'
+      '--disable-gpu',
+      '--single-process'
     ]
   }
 });
