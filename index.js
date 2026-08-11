@@ -10,7 +10,6 @@ const fs = require('fs');
 const multer = require('multer'); 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const fs = require('fs');
 
 // Verifica onde o Chromium foi instalado no container
 const getChromiumPath = () => {
@@ -66,7 +65,7 @@ let whatsappPronto = false;
 const client = new Client({
   authStrategy: new LocalAuth(),
   puppeteer: {
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser' || '/usr/bin/chromium',
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || getChromiumPath(),
     headless: true,
     args: [
       '--no-sandbox',
