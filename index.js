@@ -1,4 +1,7 @@
 require('dotenv').config();
+const qrcodeTerminal = require('qrcode-terminal');
+const QRCode = require('qrcode'); // Importa a nova biblioteca
+let ultimoQrCode = null; // Armazena a string bruta do QR Code
 const express = require('express');
 const { Pool } = require('pg');
 const cron = require('node-cron');
@@ -82,17 +85,54 @@ const client = new Client({
 });
 
 client.on('qr', (qr) => {
-  console.log('⚡ [WHATSAPP] Escaneie o QR Code abaixo para conectar:');
-  qrcode.generate(qr, { small: true });
+  console.log('⚡ [WHATSAPP] Novo QR Code gerado!');
+  ultimoQrCode = qr; // Guarda o valor do QR Code
+  
+  // Mantém a exibição no terminal (com a opção small)
+  qrcodeTerminal.generate(qr, { small: true });
 });
 
 client.on('ready', () => {
   console.log('✅ [WHATSAPP] Conectado e pronto para uso!');
   whatsappPronto = true;
+  ultimoQrCode = null; // Limpa o QR Code após conectar
 });
 
 client.initialize();
 
+app.get('/qr', async (req, res) => {
+  if (whatsappPronto) {
+    return res.send('<h3>WhatsApp já está conectado!</h3>');
+  }
+  if (!ultimoQrCode) {
+    return res.send('<h3>Aguardando geração do QR Code... Atualize a página em instantes.</h3>');
+  }
+
+  try {
+    // Gera a imagem em Data URL
+    const qrImage = await QRCode.toDataURL(ultimoQrCode);
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Conectar WhatsApp</title>
+          <meta http-equiv="refresh" content="15"> <!-- Atualiza a página a cada 15s -->
+          <style>
+            body { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif; background: #0b141a; color: #fff; }
+            img { background: white; padding: 15px; border-radius: 8px; }
+          </style>
+        </head>
+        <body>
+          <h2>Escaneie o QR Code para conectar</h2>
+          <img src="${qrImage}" alt="QR Code WhatsApp" />
+          <p>Esta página é atualizada automaticamente.</p>
+        </body>
+      </html>
+    `);
+  } catch (err) {
+    res.status(500).send('Erro ao gerar QR Code: ' + err.message);
+  }
+});
 // ==================== ROTAS DE CONTATOS ====================
 app.get('/contatos', async (req, res) => {
   try {
