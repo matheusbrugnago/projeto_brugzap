@@ -457,9 +457,13 @@ cron.schedule('* * * * *', async () => {
   if (!whatsappPronto) return;
 
   const agora = new Date();
-  const dataHojeStr = agora.toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
-  const horaMinutoStr = agora.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
-  const diaSemanaHoje = agora.getDay();
+  
+  // Obter data, hora e dia da semana exatos no fuso de Brasília
+  const dataHojeStr = agora.toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' }); // YYYY-MM-DD
+  const horaMinutoStr = agora.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' }); // HH:mm
+
+  // Pega o dia da semana (0-6) ajustado para o fuso do Brasil
+  const diaSemanaHoje = new Date(agora.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' })).getDay();
 
   try {
     const { rows: agendamentos } = await pool.query(`
@@ -478,7 +482,8 @@ cron.schedule('* * * * *', async () => {
       if (agenda.tipo_agendamento === 'fixo') {
         deveDispararHoje = datasFixas.includes(dataHojeStr);
       } else if (agenda.tipo_agendamento === 'recorrente') {
-        deveDispararHoje = diasSemana.includes(diaSemanaHoje);
+        // Aceita tanto número quanto string no array do banco
+        deveDispararHoje = diasSemana.some(d => String(d) === String(diaSemanaHoje));
       }
 
       if (!deveDispararHoje) continue;
@@ -489,9 +494,12 @@ cron.schedule('* * * * *', async () => {
       if (!horarioExato && !pendenteAtrasado) continue;
 
       const chaveExecucao = `${dataHojeStr} ${horaMinutoStr}`;
+      
+      // Ajustado 'AT TIME ZONE' para comparar o fuso correto com a trava de execução
       const { rows: jaExecutado } = await pool.query(
         `SELECT id FROM agendamento_execucoes 
-         WHERE agendamento_id = $1 AND TO_CHAR(data_hora_envio, 'YYYY-MM-DD HH24:MI') = $2`,
+         WHERE agendamento_id = $1 
+         AND TO_CHAR(data_hora_envio AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD HH24:MI') = $2`,
         [agenda.id, chaveExecucao]
       );
 
@@ -535,4 +543,7 @@ cron.schedule('* * * * *', async () => {
   } catch (err) {
     console.error('❌ Erro no Cron do Robô:', err.message);
   }
+}, {
+  scheduled: true,
+  timezone: "America/Sao_Paulo"
 });
