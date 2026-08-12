@@ -458,11 +458,17 @@ cron.schedule('* * * * *', async () => {
 
   const agora = new Date();
   
-  // Obter data, hora e dia da semana exatos no fuso de Brasília
-  const dataHojeStr = agora.toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' }); // YYYY-MM-DD
-  const horaMinutoStr = agora.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' }); // HH:mm
+  // Data de hoje em ISO (YYYY-MM-DD) e BR (DD/MM/YYYY)
+  const dataIsoHoje = agora.toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' }); 
+  const dataBrHoje = agora.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }); 
+  
+  // Hora e Minuto padronizados (HH:mm)
+  const horaMinutoStr = agora.toLocaleTimeString('pt-BR', { 
+    timeZone: 'America/Sao_Paulo', 
+    hour: '2-digit', 
+    minute: '2-digit' 
+  }).slice(0, 5); // Garante formato de 5 caracteres "20:40"
 
-  // Pega o dia da semana (0-6) ajustado para o fuso do Brasil
   const diaSemanaHoje = new Date(agora.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' })).getDay();
 
   try {
@@ -474,15 +480,20 @@ cron.schedule('* * * * *', async () => {
     `);
 
     for (const agenda of agendamentos) {
-      const horarios = typeof agenda.horarios === 'string' ? JSON.parse(agenda.horarios) : (agenda.horarios || []);
-      const datasFixas = typeof agenda.datas_fixas === 'string' ? JSON.parse(agenda.datas_fixas) : (agenda.datas_fixas || []);
-      const diasSemana = typeof agenda.dias_semana === 'string' ? JSON.parse(agenda.dias_semana) : (agenda.dias_semana || []);
+      // Normaliza arrays do banco
+      let horarios = typeof agenda.horarios === 'string' ? JSON.parse(agenda.horarios) : (agenda.horarios || []);
+      let datasFixas = typeof agenda.datas_fixas === 'string' ? JSON.parse(agenda.datas_fixas) : (agenda.datas_fixas || []);
+      let diasSemana = typeof agenda.dias_semana === 'string' ? JSON.parse(agenda.dias_semana) : (agenda.dias_semana || []);
+
+      // Converter elementos do array para string limpa
+      horarios = horarios.map(h => String(h).trim());
+      datasFixas = datasFixas.map(d => String(d).trim());
 
       let deveDispararHoje = false;
       if (agenda.tipo_agendamento === 'fixo') {
-        deveDispararHoje = datasFixas.includes(dataHojeStr);
+        // Aceita se estiver salvo como YYYY-MM-DD ou DD/MM/YYYY
+        deveDispararHoje = datasFixas.some(d => d === dataIsoHoje || d === dataBrHoje);
       } else if (agenda.tipo_agendamento === 'recorrente') {
-        // Aceita tanto número quanto string no array do banco
         deveDispararHoje = diasSemana.some(d => String(d) === String(diaSemanaHoje));
       }
 
@@ -493,9 +504,8 @@ cron.schedule('* * * * *', async () => {
 
       if (!horarioExato && !pendenteAtrasado) continue;
 
-      const chaveExecucao = `${dataHojeStr} ${horaMinutoStr}`;
+      const chaveExecucao = `${dataIsoHoje} ${horaMinutoStr}`;
       
-      // Ajustado 'AT TIME ZONE' para comparar o fuso correto com a trava de execução
       const { rows: jaExecutado } = await pool.query(
         `SELECT id FROM agendamento_execucoes 
          WHERE agendamento_id = $1 
@@ -534,7 +544,7 @@ cron.schedule('* * * * *', async () => {
       }
 
       if (agenda.tipo_agendamento === 'fixo') {
-        const datasFuturas = datasFixas.filter(d => d > dataHojeStr);
+        const datasFuturas = datasFixas.filter(d => d > dataIsoHoje && d > dataBrHoje);
         if (datasFuturas.length === 0) {
           await pool.query("UPDATE agendamentos SET status = 'finalizado', ativo = FALSE WHERE id = $1", [agenda.id]);
         }
