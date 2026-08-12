@@ -65,9 +65,11 @@ app.use(express.static(path.join(__dirname, 'public')));
 let whatsappPronto = false;
 
 // Inicialização do WhatsApp Web
-// 2. O Client do WhatsApp precisa das flags headless para conteineres
+// Inicialização do WhatsApp Web
 const client = new Client({
-  authStrategy: new LocalAuth(),
+  authStrategy: new LocalAuth({
+    dataPath: './.wwebjs_auth' // Define um caminho local explícito para a sessão
+  }),
   puppeteer: {
     executablePath: getChromiumPath(),
     headless: true,
