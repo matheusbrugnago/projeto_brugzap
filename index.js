@@ -49,7 +49,7 @@ const pool = new Pool({
 app.use(express.json());
 
 app.get('/', (req, res) => {
-  res.send('API online!');
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // 1. O servidor deve escutar a porta do ambiente
