@@ -454,20 +454,21 @@ async function enviarMensagemWhatsApp(telefone, mensagem, caminhoArquivo = null)
 
 // Tarefa executada a cada 1 minuto para checar agendamentos pendentes
 cron.schedule('* * * * *', async () => {
-  if (!whatsappPronto) return;
+  console.log(`⏱️ [CRON] Checagem do minuto iniciada... WhatsApp Pronto? ${whatsappPronto}`);
+  
+  if (!whatsappPronto) {
+    console.log('⚠️ [CRON] Abortado: WhatsApp ainda não está pronto.');
+    return;
+  }
 
   const agora = new Date();
-  
-  // Data de hoje em ISO (YYYY-MM-DD) e BR (DD/MM/YYYY)
   const dataIsoHoje = agora.toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' }); 
   const dataBrHoje = agora.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }); 
-  
-  // Hora e Minuto padronizados (HH:mm)
   const horaMinutoStr = agora.toLocaleTimeString('pt-BR', { 
     timeZone: 'America/Sao_Paulo', 
     hour: '2-digit', 
     minute: '2-digit' 
-  }).slice(0, 5); // Garante formato de 5 caracteres "20:40"
+  }).slice(0, 5);
 
   const diaSemanaHoje = new Date(agora.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' })).getDay();
 
@@ -479,30 +480,39 @@ cron.schedule('* * * * *', async () => {
       WHERE a.ativo = TRUE AND a.status != 'finalizado'
     `);
 
+    console.log(`📋 [CRON] Agendamentos ativos encontrados no banco: ${agendamentos.length}`);
+
     for (const agenda of agendamentos) {
-      // Normaliza arrays do banco
       let horarios = typeof agenda.horarios === 'string' ? JSON.parse(agenda.horarios) : (agenda.horarios || []);
       let datasFixas = typeof agenda.datas_fixas === 'string' ? JSON.parse(agenda.datas_fixas) : (agenda.datas_fixas || []);
       let diasSemana = typeof agenda.dias_semana === 'string' ? JSON.parse(agenda.dias_semana) : (agenda.dias_semana || []);
 
-      // Converter elementos do array para string limpa
       horarios = horarios.map(h => String(h).trim());
       datasFixas = datasFixas.map(d => String(d).trim());
 
+      console.log(`🔍 Analisando Agendamento ID ${agenda.id} ("${agenda.nome}"):`);
+      console.log(`   - Data Hoje: ${dataIsoHoje} / ${dataBrHoje} | Datas Banco:`, datasFixas);
+      console.log(`   - Hora Hoje: ${horaMinutoStr} | Horarios Banco:`, horarios);
+
       let deveDispararHoje = false;
       if (agenda.tipo_agendamento === 'fixo') {
-        // Aceita se estiver salvo como YYYY-MM-DD ou DD/MM/YYYY
         deveDispararHoje = datasFixas.some(d => d === dataIsoHoje || d === dataBrHoje);
       } else if (agenda.tipo_agendamento === 'recorrente') {
         deveDispararHoje = diasSemana.some(d => String(d) === String(diaSemanaHoje));
       }
 
-      if (!deveDispararHoje) continue;
+      if (!deveDispararHoje) {
+        console.log(`   ❌ Pulado: Data de hoje não corresponde.`);
+        continue;
+      }
 
       const horarioExato = horarios.includes(horaMinutoStr);
       const pendenteAtrasado = agenda.status === 'pendente' && horarios.some(h => h <= horaMinutoStr);
 
-      if (!horarioExato && !pendenteAtrasado) continue;
+      if (!horarioExato && !pendenteAtrasado) {
+        console.log(`   ❌ Pulado: Horário não corresponde.`);
+        continue;
+      }
 
       const chaveExecucao = `${dataIsoHoje} ${horaMinutoStr}`;
       
@@ -513,7 +523,10 @@ cron.schedule('* * * * *', async () => {
         [agenda.id, chaveExecucao]
       );
 
-      if (jaExecutado.length > 0) continue;
+      if (jaExecutado.length > 0) {
+        console.log(`   ❌ Pulado: Já foi executado neste minuto.`);
+        continue;
+      }
 
       console.log(`🚀 [ROBÔ] Executando disparo ID ${agenda.id}: "${agenda.nome}" em ${horaMinutoStr}`);
 
@@ -533,13 +546,16 @@ cron.schedule('* * * * *', async () => {
         contatos = rows;
       }
 
+      console.log(`   👥 Contatos encontrados para envio: ${contatos.length}`);
+
       for (const contato of contatos) {
         try {
           const msg = agenda.template_conteudo.replace(/{nome}/gi, contato.nome);
           await enviarMensagemWhatsApp(contato.telefone, msg, agenda.template_arquivo);
+          console.log(`   ✅ Mensagem enviada com sucesso para ${contato.nome} (${contato.telefone})`);
           await delay(8000);
         } catch (e) {
-          console.error(`❌ Erro no envio para ${contato.nome}:`, e.message);
+          console.error(`   ❌ Erro no envio para ${contato.nome}:`, e.message);
         }
       }
 
