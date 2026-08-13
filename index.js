@@ -68,11 +68,17 @@ let whatsappPronto = false;
 // Inicialização do WhatsApp Web
 const client = new Client({
   authStrategy: new LocalAuth({
-    dataPath: './.wwebjs_auth' // Define um caminho local explícito para a sessão
+    dataPath: './.wwebjs_auth'
   }),
+  webVersionCache: {
+    type: 'remote',
+    remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
+  },
   puppeteer: {
     executablePath: getChromiumPath(),
     headless: true,
+    // Aumentado para prevenir Timeout Error de 30s no Puppeteer
+    timeout: 60000, 
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
@@ -80,24 +86,27 @@ const client = new Client({
       '--disable-accelerated-2d-canvas',
       '--no-first-run',
       '--no-zygote',
-      '--disable-gpu',
-      '--single-process'
+      '--disable-gpu'
+      // Nota: O argumento '--single-process' foi removido por causar instabilidade no Chromium
     ]
   }
 });
 
 client.on('qr', (qr) => {
   console.log('⚡ [WHATSAPP] Novo QR Code gerado!');
-  ultimoQrCode = qr; // Guarda o valor do QR Code
-  
-  // Mantém a exibição no terminal (com a opção small)
+  ultimoQrCode = qr;
   qrcodeTerminal.generate(qr, { small: true });
 });
 
 client.on('ready', () => {
   console.log('✅ [WHATSAPP] Conectado e pronto para uso!');
   whatsappPronto = true;
-  ultimoQrCode = null; // Limpa o QR Code após conectar
+  ultimoQrCode = null;
+});
+
+client.on('disconnected', (reason) => {
+  console.warn('⚠️ [WHATSAPP] Desconectado:', reason);
+  whatsappPronto = false;
 });
 
 client.initialize();
@@ -414,20 +423,25 @@ app.delete('/agendamentos/:id', async (req, res) => {
 
 // Função para enviar mensagem individual com suporte a imagem/anexo
 async function enviarMensagemWhatsApp(telefone, mensagem, caminhoArquivo = null) {
-  let apenasNumeros = telefone.replace(/\D/g, '');
+  try {
+    let apenasNumeros = telefone.replace(/\D/g, '');
 
-  if (!apenasNumeros.startsWith('55')) {
-    apenasNumeros = `55${apenasNumeros}`;
-  }
+    if (!apenasNumeros.startsWith('55')) {
+      apenasNumeros = `55${apenasNumeros}`;
+    }
 
-  let numberDetails = await client.getNumberId(apenasNumeros);
+    let numberDetails = await client.getNumberId(apenasNumeros);
 
-  if (!numberDetails && apenasNumeros.length === 13) {
-    const semNonoDigito = apenasNumeros.slice(0, 4) + apenasNumeros.slice(5);
-    numberDetails = await client.getNumberId(semNonoDigito);
-  }
+    if (!numberDetails && apenasNumeros.length === 13) {
+      const semNonoDigito = apenasNumeros.slice(0, 4) + apenasNumeros.slice(5);
+      numberDetails = await client.getNumberId(semNonoDigito);
+    }
 
-  if (numberDetails) {
+    if (!numberDetails) {
+      console.warn(`⚠️ Número não encontrado no WhatsApp: ${telefone}`);
+      return false;
+    }
+
     const chatId = numberDetails._serialized;
     const caminhoAbsoluto = caminhoArquivo ? path.resolve(caminhoArquivo) : null;
 
@@ -439,7 +453,6 @@ async function enviarMensagemWhatsApp(telefone, mensagem, caminhoArquivo = null)
         return true;
       } catch (errFrame) {
         console.warn(`⚠️ Falha ao anexar mídia (${errFrame.message}). Tentando reenviar apenas o texto...`);
-        // Aguarda 2 segundos para o frame do Puppeteer estabilizar antes do fallback de texto
         await delay(2000); 
         await client.sendMessage(chatId, mensagem);
         return true;
@@ -448,8 +461,10 @@ async function enviarMensagemWhatsApp(telefone, mensagem, caminhoArquivo = null)
       await client.sendMessage(chatId, mensagem);
       return true;
     }
+  } catch (err) {
+    console.error(`❌ Erro crítico ao processar envio para ${telefone}:`, err.message);
+    return false;
   }
-  return false;
 }
 
 // Tarefa executada a cada 1 minuto para checar agendamentos pendentes
