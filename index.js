@@ -1,21 +1,21 @@
 require('dotenv').config();
 const qrcodeTerminal = require('qrcode-terminal');
-const QRCode = require('qrcode'); // Importa a nova biblioteca
-let ultimoQrCode = null; // Armazena a string bruta do QR Code
+const QRCode = require('qrcode');
+let ultimoQrCode = null;
 const express = require('express');
 const { Pool } = require('pg');
 const cron = require('node-cron');
-const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
-const qrcode = require('qrcode-terminal');
+const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js'); // Importado apenas 1 vez aqui
 const path = require('path');
 const mime = require('mime-types');
 const fs = require('fs');
 const multer = require('multer'); 
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 const sessionPath = path.join(__dirname, '.wwebjs_auth');
 
-// Verifica onde o Chromium foi instalado no container
+// Detecta o caminho do Chromium instalado no Docker/Railway
 const getChromiumPath = () => {
   if (process.env.PUPPETEER_EXECUTABLE_PATH) return process.env.PUPPETEER_EXECUTABLE_PATH;
   if (fs.existsSync('/usr/bin/chromium')) return '/usr/bin/chromium';
@@ -23,16 +23,17 @@ const getChromiumPath = () => {
   return undefined;
 };
 
+// Configuração do Multer para uploads
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, 'uploads/');
   },
   filename: function (req, file, cb) {
-    // Mantém o nome original com a extensão (ex: 1680000000000-foto.png)
     const ext = path.extname(file.originalname);
     cb(null, Date.now() + ext);
   }
 });
+
 if (!fs.existsSync('uploads')) {
   fs.mkdirSync('uploads');
 }
@@ -40,62 +41,61 @@ if (!fs.existsSync('uploads')) {
 const upload = multer({ storage: storage });
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-//postgresql
+// Conexão PostgreSQL
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
 });
 
-//Middlewares
+// Middlewares
 app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// 1. O servidor deve escutar a porta do ambiente
-
 app.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
+  console.log(`🚀 Servidor rodando na porta ${PORT}`);
 });
-
-// Servir arquivos estáticos da pasta 'public'
-app.use(express.static(path.join(__dirname, 'public')));
-
 
 let whatsappPronto = false;
 
+// Função para remover arquivos de trava do Chromium (evita erro de perfil bloqueado)
 function removeChromiumLocks(dir) {
   if (!fs.existsSync(dir)) return;
   
-  const files = fs.readdirSync(dir);
-  for (const file of files) {
-    const fullPath = path.join(dir, file);
-    if (fs.statSync(fullPath).isDirectory()) {
-      removeChromiumLocks(fullPath);
-    } else if (file === 'SingletonLock' || file === 'SingletonCookie' || file === 'SingletonSocket') {
-      try {
-        fs.unlinkSync(fullPath);
-        console.log(`🔒 Arquivo de trava removido: ${fullPath}`);
-      } catch (err) {
-        console.error(`Erro ao remover arquivo de trava: ${err.message}`);
+  try {
+    const files = fs.readdirSync(dir);
+    for (const file of files) {
+      const fullPath = path.join(dir, file);
+      if (fs.statSync(fullPath).isDirectory()) {
+        removeChromiumLocks(fullPath);
+      } else if (file === 'SingletonLock' || file === 'SingletonCookie' || file === 'SingletonSocket') {
+        try {
+          fs.unlinkSync(fullPath);
+          console.log(`🔒 Arquivo de trava removido: ${fullPath}`);
+        } catch (err) {
+          console.error(`Erro ao remover arquivo de trava: ${err.message}`);
+        }
       }
     }
+  } catch (err) {
+    console.error(`Erro na leitura do diretório de sessão: ${err.message}`);
   }
 }
 
-// Executa a limpeza dos locks antes de inicializar o WhatsApp
+// 1. Limpa travas de execuções anteriores
 removeChromiumLocks(sessionPath);
 
-const { Client, LocalAuth } = require('whatsapp-web.js');
-// Inicialização do WhatsApp Web
-// Inicialização do WhatsApp Web
+// 2. Inicialização do WhatsApp Web com caminho correto do Chromium
 const client = new Client({
   authStrategy: new LocalAuth({
-    dataPath: './.wwebjs_auth' // Ou o caminho configurado no volume
+    dataPath: sessionPath
   }),
   puppeteer: {
     headless: true,
+    executablePath: getChromiumPath(), // Atribui o executável correto
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
@@ -103,7 +103,7 @@ const client = new Client({
       '--disable-accelerated-2d-canvas',
       '--no-first-run',
       '--no-zygote',
-      '--single-process', // Ajuda a evitar múltiplos processos do Chrome travando o perfil
+      '--single-process',
       '--disable-gpu'
     ]
   }
@@ -126,8 +126,12 @@ client.on('disconnected', (reason) => {
   whatsappPronto = false;
 });
 
-client.initialize();
+// Aguarda 1 segundo antes de disparar o WhatsApp para dar tempo do sistema liberar as pastas
+setTimeout(() => {
+  client.initialize();
+}, 1000);
 
+// ==================== ROTA QR CODE ====================
 app.get('/qr', async (req, res) => {
   if (whatsappPronto) {
     return res.send('<h3>WhatsApp já está conectado!</h3>');
@@ -137,14 +141,13 @@ app.get('/qr', async (req, res) => {
   }
 
   try {
-    // Gera a imagem em Data URL
     const qrImage = await QRCode.toDataURL(ultimoQrCode);
     res.send(`
       <!DOCTYPE html>
       <html>
         <head>
           <title>Conectar WhatsApp</title>
-          <meta http-equiv="refresh" content="15"> <!-- Atualiza a página a cada 15s -->
+          <meta http-equiv="refresh" content="15">
           <style>
             body { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif; background: #0b141a; color: #fff; }
             img { background: white; padding: 15px; border-radius: 8px; }
@@ -161,6 +164,7 @@ app.get('/qr', async (req, res) => {
     res.status(500).send('Erro ao gerar QR Code: ' + err.message);
   }
 });
+
 // ==================== ROTAS DE CONTATOS ====================
 app.get('/contatos', async (req, res) => {
   try {
@@ -279,7 +283,6 @@ app.get('/templates', async (req, res) => {
   }
 });
 
-// POST: Criar novo template (com anexo opcional)
 app.post('/templates', upload.single('anexo'), async (req, res) => {
   const { nome, conteudo } = req.body;
   const arquivo_url = req.file ? req.file.path : null;
@@ -296,7 +299,6 @@ app.post('/templates', upload.single('anexo'), async (req, res) => {
   }
 });
 
-// PUT: Atualizar template existente (com anexo opcional)
 app.put('/templates/:id', upload.single('anexo'), async (req, res) => {
   const { id } = req.params;
   const { nome, conteudo } = req.body;
@@ -306,12 +308,10 @@ app.put('/templates/:id', upload.single('anexo'), async (req, res) => {
     let query = '';
     let params = [];
 
-    // Se o usuário selecionou uma nova imagem ao editar, atualiza o arquivo_url
     if (novoArquivo) {
       query = 'UPDATE templates SET nome = $1, conteudo = $2, arquivo_url = $3 WHERE id = $4 RETURNING *';
       params = [nome, conteudo, novoArquivo, id];
     } else {
-      // Se não enviou novo arquivo, mantém o arquivo antigo que já estava gravado
       query = 'UPDATE templates SET nome = $1, conteudo = $2 WHERE id = $3 RETURNING *';
       params = [nome, conteudo, id];
     }
@@ -438,7 +438,6 @@ app.delete('/agendamentos/:id', async (req, res) => {
 
 // ==================== AUXILIARES DE ENVIO E CRON ====================
 
-// Função para enviar mensagem individual com suporte a imagem/anexo
 async function enviarMensagemWhatsApp(telefone, mensagem, caminhoArquivo = null) {
   try {
     let apenasNumeros = telefone.replace(/\D/g, '');
@@ -484,7 +483,6 @@ async function enviarMensagemWhatsApp(telefone, mensagem, caminhoArquivo = null)
   }
 }
 
-// Tarefa executada a cada 1 minuto para checar agendamentos pendentes
 cron.schedule('* * * * *', async () => {
   console.log(`⏱️ [CRON] Checagem do minuto iniciada... WhatsApp Pronto? ${whatsappPronto}`);
   
