@@ -95,6 +95,7 @@ function removeChromiumLocks(dir) {
 removeChromiumLocks(sessionPath);
 
 // 2. Inicialização do WhatsApp Web com flags extras de tolerância no Chromium
+// Inicialização do WhatsApp Web com proteções de Frame e Memória
 const client = new Client({
   authStrategy: new LocalAuth({
     dataPath: sessionPath
@@ -102,18 +103,22 @@ const client = new Client({
   puppeteer: {
     headless: true,
     executablePath: getChromiumPath(),
+    // Aumenta o tempo limite de carregamento da página do WhatsApp
+    navigationTimeout: 60000,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
+      '--disable-dev-shm-usage', // Crítico para evitar estouro de memória/detached frame
       '--disable-accelerated-2d-canvas',
       '--no-first-run',
       '--no-zygote',
       '--single-process',
       '--disable-gpu',
-      // Flags cruciais para evitar o erro "The profile appears to be in use":
       '--disable-process-singleton-check',
-      '--no-service-autorun'
+      '--no-service-autorun',
+      // Flags para manter a estabilidade dos Frames do Chromium:
+      '--disable-features=site-per-process',
+      '--disable-extensions'
     ]
   }
 });
@@ -479,6 +484,7 @@ async function enviarMensagemWhatsApp(telefone, mensagem, caminhoArquivo = null)
       } catch (errFrame) {
         console.warn(`⚠️ Falha ao anexar mídia (${errFrame.message}). Tentando reenviar apenas o texto...`);
         await delay(2000); 
+        // Lança o erro se a tentativa de fallback de texto também falhar
         await client.sendMessage(chatId, mensagem);
         return true;
       }
@@ -488,7 +494,8 @@ async function enviarMensagemWhatsApp(telefone, mensagem, caminhoArquivo = null)
     }
   } catch (err) {
     console.error(`❌ Erro crítico ao processar envio para ${telefone}:`, err.message);
-    return false;
+    // Lança a exceção para que o loop principal saiba que falhou
+    throw err; 
   }
 }
 
