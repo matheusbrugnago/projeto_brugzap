@@ -62,40 +62,46 @@ app.listen(PORT, () => {
 let whatsappPronto = false;
 
 // Função para remover arquivos de trava do Chromium (evita erro de perfil bloqueado)
+// Função com suporte a links simbólicos (symlinks) e remoção forçada de travas
 function removeChromiumLocks(dir) {
   if (!fs.existsSync(dir)) return;
-  
+
   try {
-    const files = fs.readdirSync(dir);
-    for (const file of files) {
-      const fullPath = path.join(dir, file);
-      if (fs.statSync(fullPath).isDirectory()) {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+
+      if (entry.isDirectory()) {
         removeChromiumLocks(fullPath);
-      } else if (file === 'SingletonLock' || file === 'SingletonCookie' || file === 'SingletonSocket') {
+      } else if (
+        entry.name.startsWith('Singleton') || 
+        entry.name === 'lockfile'
+      ) {
         try {
-          fs.unlinkSync(fullPath);
-          console.log(`🔒 Arquivo de trava removido: ${fullPath}`);
+          // fs.rmSync com force:true remove symlinks quebrados e arquivos bloqueados
+          fs.rmSync(fullPath, { force: true, recursive: true });
+          console.log(`🔒 Arquivo/Atalho de trava removido com sucesso: ${fullPath}`);
         } catch (err) {
-          console.error(`Erro ao remover arquivo de trava: ${err.message}`);
+          console.error(`⚠️ Não foi possível remover a trava ${fullPath}: ${err.message}`);
         }
       }
     }
   } catch (err) {
-    console.error(`Erro na leitura do diretório de sessão: ${err.message}`);
+    console.error(`⚠️ Erro ao varrer pasta de sessão: ${err.message}`);
   }
 }
 
-// 1. Limpa travas de execuções anteriores
+// 1. Apaga travas antigas com suporte a links simbólicos
 removeChromiumLocks(sessionPath);
 
-// 2. Inicialização do WhatsApp Web com caminho correto do Chromium
+// 2. Inicialização do WhatsApp Web com flags extras de tolerância no Chromium
 const client = new Client({
   authStrategy: new LocalAuth({
     dataPath: sessionPath
   }),
   puppeteer: {
     headless: true,
-    executablePath: getChromiumPath(), // Atribui o executável correto
+    executablePath: getChromiumPath(),
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
@@ -104,7 +110,10 @@ const client = new Client({
       '--no-first-run',
       '--no-zygote',
       '--single-process',
-      '--disable-gpu'
+      '--disable-gpu',
+      // Flags cruciais para evitar o erro "The profile appears to be in use":
+      '--disable-process-singleton-check',
+      '--no-service-autorun'
     ]
   }
 });
@@ -126,10 +135,10 @@ client.on('disconnected', (reason) => {
   whatsappPronto = false;
 });
 
-// Aguarda 1 segundo antes de disparar o WhatsApp para dar tempo do sistema liberar as pastas
+// Aguarda 1.5s após a remoção das travas para que o sistema de arquivos do Railway processe a exclusão
 setTimeout(() => {
   client.initialize();
-}, 1000);
+}, 1500);
 
 // ==================== ROTA QR CODE ====================
 app.get('/qr', async (req, res) => {
