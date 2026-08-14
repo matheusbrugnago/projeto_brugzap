@@ -96,6 +96,7 @@ removeChromiumLocks(sessionPath);
 
 // 2. Inicialização do WhatsApp Web com flags extras de tolerância no Chromium
 // Inicialização do WhatsApp Web com proteções de Frame e Memória
+// Configuração otimizada do Chromium para evitar reciclagem de Frames
 const client = new Client({
   authStrategy: new LocalAuth({
     dataPath: sessionPath
@@ -103,12 +104,11 @@ const client = new Client({
   puppeteer: {
     headless: true,
     executablePath: getChromiumPath(),
-    // Aumenta o tempo limite de carregamento da página do WhatsApp
     navigationTimeout: 60000,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage', // Crítico para evitar estouro de memória/detached frame
+      '--disable-dev-shm-usage',
       '--disable-accelerated-2d-canvas',
       '--no-first-run',
       '--no-zygote',
@@ -116,9 +116,9 @@ const client = new Client({
       '--disable-gpu',
       '--disable-process-singleton-check',
       '--no-service-autorun',
-      // Flags para manter a estabilidade dos Frames do Chromium:
-      '--disable-features=site-per-process',
-      '--disable-extensions'
+      '--disable-features=site-per-process,IsolateOrigins', // Impede o isolamento agressivo de iFrames
+      '--disable-site-isolation-trials',
+      '--disable-web-security'
     ]
   }
 });
@@ -453,49 +453,77 @@ app.delete('/agendamentos/:id', async (req, res) => {
 // ==================== AUXILIARES DE ENVIO E CRON ====================
 
 async function enviarMensagemWhatsApp(telefone, mensagem, caminhoArquivo = null) {
-  try {
-    let apenasNumeros = telefone.replace(/\D/g, '');
+  let tentativas = 0;
+  const maxTentativas = 2;
 
-    if (!apenasNumeros.startsWith('55')) {
-      apenasNumeros = `55${apenasNumeros}`;
-    }
+  while (tentativas < maxTentativas) {
+    try {
+      let apenasNumeros = telefone.replace(/\D/g, '');
 
-    let numberDetails = await client.getNumberId(apenasNumeros);
+      if (!apenasNumeros.startsWith('55')) {
+        apenasNumeros = `55${apenasNumeros}`;
+      }
 
-    if (!numberDetails && apenasNumeros.length === 13) {
-      const semNonoDigito = apenasNumeros.slice(0, 4) + apenasNumeros.slice(5);
-      numberDetails = await client.getNumberId(semNonoDigito);
-    }
+      // Valida se a página do WhatsApp Web está viva
+      if (client.pupPage && client.pupPage.isClosed()) {
+        throw new Error('A página do WhatsApp foi fechada. Reiniciando...');
+      }
 
-    if (!numberDetails) {
-      console.warn(`⚠️ Número não encontrado no WhatsApp: ${telefone}`);
-      return false;
-    }
+      let numberDetails = await client.getNumberId(apenasNumeros);
 
-    const chatId = numberDetails._serialized;
-    const caminhoAbsoluto = caminhoArquivo ? path.resolve(caminhoArquivo) : null;
+      if (!numberDetails && apenasNumeros.length === 13) {
+        const semNonoDigito = apenasNumeros.slice(0, 4) + apenasNumeros.slice(5);
+        numberDetails = await client.getNumberId(semNonoDigito);
+      }
 
-    if (caminhoAbsoluto && fs.existsSync(caminhoAbsoluto)) {
-      console.log(`📎 Enviando anexo: ${caminhoAbsoluto}`);
-      try {
-        const media = MessageMedia.fromFilePath(caminhoAbsoluto);
-        await client.sendMessage(chatId, media, { caption: mensagem });
-        return true;
-      } catch (errFrame) {
-        console.warn(`⚠️ Falha ao anexar mídia (${errFrame.message}). Tentando reenviar apenas o texto...`);
-        await delay(2000); 
-        // Lança o erro se a tentativa de fallback de texto também falhar
+      if (!numberDetails) {
+        console.warn(`⚠️ Número não encontrado no WhatsApp: ${telefone}`);
+        return false;
+      }
+
+      const chatId = numberDetails._serialized;
+      const caminhoAbsoluto = caminhoArquivo ? path.resolve(caminhoArquivo) : null;
+
+      if (caminhoAbsoluto && fs.existsSync(caminhoAbsoluto)) {
+        console.log(`📎 Enviando anexo: ${caminhoAbsoluto}`);
+        try {
+          const media = MessageMedia.fromFilePath(caminhoAbsoluto);
+          await client.sendMessage(chatId, media, { caption: mensagem });
+          return true;
+        } catch (errAnexo) {
+          console.warn(`⚠️ Falha no envio com anexo (${errAnexo.message}). Enviando apenas texto...`);
+          await delay(2000);
+          await client.sendMessage(chatId, mensagem);
+          return true;
+        }
+      } else {
         await client.sendMessage(chatId, mensagem);
         return true;
       }
-    } else {
-      await client.sendMessage(chatId, mensagem);
-      return true;
+
+    } catch (err) {
+      tentativas++;
+      console.error(`⚠️ Tentativa ${tentativas} falhou para ${telefone}: ${err.message}`);
+
+      // Se o erro for de Detached Frame ou destruição da página, recarrega o contexto do Puppeteer
+      if (err.message.includes('detached Frame') || err.message.includes('Target closed') || err.message.includes('Execution context was destroyed')) {
+        console.log('🔄 Recuperando sessão do WhatsApp Web...');
+        try {
+          if (client.pupPage) {
+            await client.pupPage.reload({ waitUntil: ['networkidle0', 'domcontentloaded'] });
+            await delay(5000); // Espera estabilizar após o reload
+          }
+        } catch (reloadErr) {
+          console.error('❌ Erro ao tentar recarregar página:', reloadErr.message);
+        }
+      }
+
+      if (tentativas >= maxTentativas) {
+        throw err;
+      }
+      
+      await delay(3000);
     }
-  } catch (err) {
-    console.error(`❌ Erro crítico ao processar envio para ${telefone}:`, err.message);
-    // Lança a exceção para que o loop principal saiba que falhou
-    throw err; 
   }
 }
 
