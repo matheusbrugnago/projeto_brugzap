@@ -13,6 +13,7 @@ const fs = require('fs');
 const multer = require('multer'); 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const sessionPath = path.join(__dirname, '.wwebjs_auth');
 
 // Verifica onde o Chromium foi instalado no container
 const getChromiumPath = () => {
@@ -64,21 +65,37 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 let whatsappPronto = false;
 
+function removeChromiumLocks(dir) {
+  if (!fs.existsSync(dir)) return;
+  
+  const files = fs.readdirSync(dir);
+  for (const file of files) {
+    const fullPath = path.join(dir, file);
+    if (fs.statSync(fullPath).isDirectory()) {
+      removeChromiumLocks(fullPath);
+    } else if (file === 'SingletonLock' || file === 'SingletonCookie' || file === 'SingletonSocket') {
+      try {
+        fs.unlinkSync(fullPath);
+        console.log(`🔒 Arquivo de trava removido: ${fullPath}`);
+      } catch (err) {
+        console.error(`Erro ao remover arquivo de trava: ${err.message}`);
+      }
+    }
+  }
+}
+
+// Executa a limpeza dos locks antes de inicializar o WhatsApp
+removeChromiumLocks(sessionPath);
+
+const { Client, LocalAuth } = require('whatsapp-web.js');
 // Inicialização do WhatsApp Web
 // Inicialização do WhatsApp Web
 const client = new Client({
   authStrategy: new LocalAuth({
-    dataPath: './.wwebjs_auth'
+    dataPath: './.wwebjs_auth' // Ou o caminho configurado no volume
   }),
-  webVersionCache: {
-    type: 'remote',
-    remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
-  },
   puppeteer: {
-    executablePath: getChromiumPath(),
     headless: true,
-    // Aumentado para prevenir Timeout Error de 30s no Puppeteer
-    timeout: 60000, 
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
@@ -86,8 +103,8 @@ const client = new Client({
       '--disable-accelerated-2d-canvas',
       '--no-first-run',
       '--no-zygote',
+      '--single-process', // Ajuda a evitar múltiplos processos do Chrome travando o perfil
       '--disable-gpu'
-      // Nota: O argumento '--single-process' foi removido por causar instabilidade no Chromium
     ]
   }
 });
