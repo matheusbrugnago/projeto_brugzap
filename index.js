@@ -101,6 +101,10 @@ const client = new Client({
   authStrategy: new LocalAuth({
     dataPath: sessionPath
   }),
+  webVersionCache: {
+    type: 'remote',
+    remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
+  },
   puppeteer: {
     headless: true,
     executablePath: getChromiumPath(),
@@ -116,7 +120,7 @@ const client = new Client({
       '--disable-gpu',
       '--disable-process-singleton-check',
       '--no-service-autorun',
-      '--disable-features=site-per-process,IsolateOrigins', // Impede o isolamento agressivo de iFrames
+      '--disable-features=site-per-process,IsolateOrigins',
       '--disable-site-isolation-trials',
       '--disable-web-security'
     ]
@@ -464,9 +468,9 @@ async function enviarMensagemWhatsApp(telefone, mensagem, caminhoArquivo = null)
         apenasNumeros = `55${apenasNumeros}`;
       }
 
-      // Valida se a página do WhatsApp Web está viva
-      if (client.pupPage && client.pupPage.isClosed()) {
-        throw new Error('A página do WhatsApp foi fechada. Reiniciando...');
+      // Validação de estado antes de tentar interagir com a aba
+      if (!whatsappPronto) {
+        throw new Error('WhatsApp não está em estado PRONTO para envio.');
       }
 
       let numberDetails = await client.getNumberId(apenasNumeros);
@@ -505,24 +509,12 @@ async function enviarMensagemWhatsApp(telefone, mensagem, caminhoArquivo = null)
       tentativas++;
       console.error(`⚠️ Tentativa ${tentativas} falhou para ${telefone}: ${err.message}`);
 
-      // Se o erro for de Detached Frame ou destruição da página, recarrega o contexto do Puppeteer
-      if (err.message.includes('detached Frame') || err.message.includes('Target closed') || err.message.includes('Execution context was destroyed')) {
-        console.log('🔄 Recuperando sessão do WhatsApp Web...');
-        try {
-          if (client.pupPage) {
-            await client.pupPage.reload({ waitUntil: ['networkidle0', 'domcontentloaded'] });
-            await delay(5000); // Espera estabilizar após o reload
-          }
-        } catch (reloadErr) {
-          console.error('❌ Erro ao tentar recarregar página:', reloadErr.message);
-        }
-      }
-
       if (tentativas >= maxTentativas) {
         throw err;
       }
-      
-      await delay(3000);
+
+      // Se o frame cair, apenas aguarda a recuperação natural do client sem tentar recarregar a aba destruída
+      await delay(4000);
     }
   }
 }
