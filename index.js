@@ -108,11 +108,12 @@ const client = new Client({
   puppeteer: {
     headless: true,
     executablePath: getChromiumPath(),
-    navigationTimeout: 60000,
+    navigationTimeout: 90000,
+    bypassCSP: true, // Evita bloqueios de iframe no Chromium
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
+      '--disable-dev-shm-usage', // Mantém a memória compartilhada no disco
       '--disable-accelerated-2d-canvas',
       '--no-first-run',
       '--no-zygote',
@@ -468,9 +469,10 @@ async function enviarMensagemWhatsApp(telefone, mensagem, caminhoArquivo = null)
         apenasNumeros = `55${apenasNumeros}`;
       }
 
-      // Validação de estado antes de tentar interagir com a aba
-      if (!whatsappPronto) {
-        throw new Error('WhatsApp não está em estado PRONTO para envio.');
+      // Valida se o Puppeteer ainda tem uma aba ativa. Se a aba morreu, aciona reinício transparente.
+      if (!whatsappPronto || !client.pupPage || client.pupPage.isClosed()) {
+        whatsappPronto = false;
+        throw new Error('Sessão do navegador inativa ou aba destruída.');
       }
 
       let numberDetails = await client.getNumberId(apenasNumeros);
@@ -509,12 +511,22 @@ async function enviarMensagemWhatsApp(telefone, mensagem, caminhoArquivo = null)
       tentativas++;
       console.error(`⚠️ Tentativa ${tentativas} falhou para ${telefone}: ${err.message}`);
 
+      // Se for um erro de frame destruído, reinicia a aba via re-inicialização sem perder a sessão do volume
+      if (err.message.includes('detached Frame') || err.message.includes('inativa')) {
+        console.log('🔄 Reiniciando motor do WhatsApp para recuperar a aba...');
+        whatsappPronto = false;
+        try {
+          await client.destroy();
+        } catch (e) {}
+        await delay(3000);
+        client.initialize();
+      }
+
       if (tentativas >= maxTentativas) {
         throw err;
       }
 
-      // Se o frame cair, apenas aguarda a recuperação natural do client sem tentar recarregar a aba destruída
-      await delay(4000);
+      await delay(5000);
     }
   }
 }
