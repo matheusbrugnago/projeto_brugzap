@@ -63,6 +63,7 @@ let whatsappPronto = false;
 
 // Função para remover arquivos de trava do Chromium (evita erro de perfil bloqueado)
 // Função com suporte a links simbólicos (symlinks) e remoção forçada de travas
+// Função segura: Limpa apenas travas soltas na raiz e ignora arquivos internos de sessão ativos
 function removeChromiumLocks(dir) {
   if (!fs.existsSync(dir)) return;
 
@@ -71,23 +72,18 @@ function removeChromiumLocks(dir) {
     for (const entry of entries) {
       const fullPath = path.join(dir, entry.name);
 
-      if (entry.isDirectory()) {
-        removeChromiumLocks(fullPath);
-      } else if (
-        entry.name.startsWith('Singleton') || 
-        entry.name === 'lockfile'
-      ) {
+      // Não entra nas subpastas internas do Chrome para não corromper os dados de autenticação
+      if (entry.isFile() && (entry.name.startsWith('Singleton') || entry.name === 'lockfile')) {
         try {
-          // fs.rmSync com force:true remove symlinks quebrados e arquivos bloqueados
-          fs.rmSync(fullPath, { force: true, recursive: true });
-          console.log(`🔒 Arquivo/Atalho de trava removido com sucesso: ${fullPath}`);
+          fs.rmSync(fullPath, { force: true });
+          console.log(`🔒 Trava de processo removida: ${fullPath}`);
         } catch (err) {
           console.error(`⚠️ Não foi possível remover a trava ${fullPath}: ${err.message}`);
         }
       }
     }
   } catch (err) {
-    console.error(`⚠️ Erro ao varrer pasta de sessão: ${err.message}`);
+    console.error(`⚠️ Erro ao checar pasta de sessão: ${err.message}`);
   }
 }
 
